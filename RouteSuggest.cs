@@ -1,8 +1,11 @@
 using Godot;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using MegaCrit.Sts2.Core.Modding;
 using MegaCrit.Sts2.Core.Logging;
 using MegaCrit.Sts2.Core.Runs;
@@ -103,6 +106,9 @@ public static class RouteSuggest
     {
         Log.Warn("RouteSuggest: Mod loaded");
 
+        // Load configuration from file if available
+        LoadConfig();
+
         // listen to events
         var manager = RunManager.Instance;
         manager.RunStarted += OnRunStarted;
@@ -112,6 +118,140 @@ public static class RouteSuggest
 
         // Initialize reflection for path highlighting
         InitializeReflection();
+    }
+
+    static void LoadConfig()
+    {
+        try
+        {
+            string executablePath = OS.GetExecutablePath();
+            string directoryName = Path.GetDirectoryName(executablePath);
+            string modsPath = Path.Combine(directoryName, "mods");
+            string configPath = Path.Combine(modsPath, "RouteSuggestConfig.json");
+            
+            if (!File.Exists(configPath))
+            {
+                Log.Warn($"RouteSuggest: Config file not found at {configPath}, using default path configs");
+                return;
+            }
+
+            string json = File.ReadAllText(configPath);
+            var options = new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true
+            };
+
+            var configData = JsonSerializer.Deserialize<ConfigFile>(json, options);
+            
+            if (configData?.SchemaVersion != 1)
+            {
+                Log.Warn($"RouteSuggest: Unsupported schema version {configData?.SchemaVersion}, using defaults");
+                return;
+            }
+
+            if (configData.PathConfigs == null)
+            {
+                Log.Warn("RouteSuggest: No path configs found in config file, using defaults");
+                return;
+            }
+
+            // Clear and replace with loaded configs
+            PathConfigs.Clear();
+            foreach (var configEntry in configData.PathConfigs)
+            {
+                var config = new PathConfig
+                {
+                    Name = configEntry.Name,
+                    Priority = configEntry.Priority,
+                    Color = ParseColor(configEntry.Color),
+                    ScoringWeights = ParseScoringWeights(configEntry.ScoringWeights)
+                };
+                PathConfigs.Add(config);
+                Log.Warn($"RouteSuggest: Loaded path config '{config.Name}' from file");
+            }
+
+            Log.Warn($"RouteSuggest: Successfully loaded {PathConfigs.Count} path configs from {configPath}");
+        }
+        catch (Exception ex)
+        {
+            Log.Warn($"RouteSuggest: Failed to load config file: {ex.Message}, using defaults");
+        }
+    }
+
+    static Color ParseColor(string colorStr)
+    {
+        if (string.IsNullOrEmpty(colorStr))
+            return new Color(1f, 1f, 1f, 1f);
+
+        // Support hex format like "#FFD700" or "#FFD700FF"
+        if (colorStr.StartsWith("#"))
+        {
+            colorStr = colorStr.Substring(1);
+            if (colorStr.Length == 6)
+            {
+                // RGB format
+                float r = Convert.ToInt32(colorStr.Substring(0, 2), 16) / 255f;
+                float g = Convert.ToInt32(colorStr.Substring(2, 2), 16) / 255f;
+                float b = Convert.ToInt32(colorStr.Substring(4, 2), 16) / 255f;
+                return new Color(r, g, b, 1f);
+            }
+            else if (colorStr.Length == 8)
+            {
+                // RGBA format
+                float r = Convert.ToInt32(colorStr.Substring(0, 2), 16) / 255f;
+                float g = Convert.ToInt32(colorStr.Substring(2, 2), 16) / 255f;
+                float b = Convert.ToInt32(colorStr.Substring(4, 2), 16) / 255f;
+                float a = Convert.ToInt32(colorStr.Substring(6, 2), 16) / 255f;
+                return new Color(r, g, b, a);
+            }
+        }
+
+        // Fallback: return white
+        return new Color(1f, 1f, 1f, 1f);
+    }
+
+    static Dictionary<MapPointType, int> ParseScoringWeights(Dictionary<string, int> weightsDict)
+    {
+        var result = new Dictionary<MapPointType, int>();
+        if (weightsDict == null) return result;
+
+        foreach (var kvp in weightsDict)
+        {
+            if (Enum.TryParse<MapPointType>(kvp.Key, out var pointType))
+            {
+                result[pointType] = kvp.Value;
+            }
+            else
+            {
+                Log.Warn($"RouteSuggest: Unknown MapPointType '{kvp.Key}' in config");
+            }
+        }
+        return result;
+    }
+
+    // Config file data classes for JSON deserialization
+    private class ConfigFile
+    {
+        [JsonPropertyName("schema_version")]
+        public int SchemaVersion { get; set; }
+
+        [JsonPropertyName("path_configs")]
+        public List<PathConfigEntry> PathConfigs { get; set; }
+    }
+
+    private class PathConfigEntry
+    {
+        [JsonPropertyName("name")]
+        public string Name { get; set; }
+
+        [JsonPropertyName("color")]
+        public string Color { get; set; }
+
+        [JsonPropertyName("priority")]
+        public int Priority { get; set; }
+
+        [JsonPropertyName("scoring_weights")]
+        public Dictionary<string, int> ScoringWeights { get; set; }
     }
 
     static void InitializeReflection()

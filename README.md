@@ -77,11 +77,59 @@ Prioritizes combat rewards and unknown encounters:
 
 When both paths share an edge, it appears in gold.
 
+## Configuration
+
+You can customize the path types by creating a `RouteSuggestConfig.json` file in the mods folder (i.e. `mods/RouteSuggestConfig.json`):
+
+```json
+{
+  "schema_version": 1,
+  "path_configs": [
+    {
+      "name": "Safe",
+      "color": "#FFD700",
+      "priority": 100,
+      "scoring_weights": {
+        "RestSite": 1,
+        "Treasure": 1,
+        "Shop": 1,
+        "Monster": -1,
+        "Elite": -2
+      }
+    },
+    {
+      "name": "Aggressive", 
+      "color": "#FF0000",
+      "priority": 50,
+      "scoring_weights": {
+        "RestSite": 1,
+        "Treasure": 1,
+        "Shop": 1,
+        "Monster": 1,
+        "Elite": 2,
+        "Unknown": 1
+      }
+    }
+  ]
+}
+```
+
+- **color**: Hex color code (e.g., `#FFD700` for gold, `#FF0000` for red)
+- **priority**: Higher values render on top when paths overlap
+- **scoring_weights**: Integer values for each room type (positive = preferred, negative = avoid)
+
+Available room types: `RestSite`, `Treasure`, `Shop`, `Monster`, `Elite`, `Unknown`, `Boss`
+
+If the config file is missing or invalid, default path configs are used.
+
 ## Changelog
 
 ### Unreleased
 
-- Tuned the weights for safe/aggressive paths
+- Tuned the default weights for safe/aggressive paths
+- Added configurable paths via `mods/RouteSuggestConfig.json`
+- Path configs can be customized with custom colors, priorities, and scoring weights
+- Falls back to defaults if config file is missing or invalid
 
 ### v1.2.0
 
