@@ -79,6 +79,10 @@ When both paths share an edge, it appears in gold.
 
 ## Changelog
 
+### v1.2.0
+
+- Fixed path highlighting when entering a new act
+
 ### v1.1.0
 
 - Added dual path mode: safe path (gold) and aggressive path (red)
