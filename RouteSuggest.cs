@@ -189,6 +189,9 @@ public static class RouteSuggest
         var allPaths = new List<List<MapPoint>>();
         FindAllPathsToBoss(startPoint, currentPath, allPaths);
 
+        // Sort paths by their coordinate sequence for reproducibility
+        allPaths.Sort();
+
         Log.Warn($"RouteSuggest: Found {allPaths.Count} path(s) to Boss");
         for (int i = 0; i < allPaths.Count; i++)
         {
