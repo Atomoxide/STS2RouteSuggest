@@ -190,7 +190,16 @@ public static class RouteSuggest
         FindAllPathsToBoss(startPoint, currentPath, allPaths);
 
         // Sort paths by their coordinate sequence for reproducibility
-        allPaths.Sort();
+        allPaths.Sort((a, b) =>
+        {
+            int minLen = Math.Min(a.Count, b.Count);
+            for (int i = 0; i < minLen; i++)
+            {
+                int cmp = a[i].coord.CompareTo(b[i].coord);
+                if (cmp != 0) return cmp;
+            }
+            return a.Count.CompareTo(b.Count);
+        });
 
         Log.Warn($"RouteSuggest: Found {allPaths.Count} path(s) to Boss");
         for (int i = 0; i < allPaths.Count; i++)
