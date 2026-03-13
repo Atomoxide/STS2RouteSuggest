@@ -69,6 +69,34 @@ public static class RouteSuggest {
 					Log.Warn($"RouteSuggest:   coord={point.coord}, type={point.PointType}");
 				}
 			}
+
+			// Calculate scores for each path and find the best
+			if (allPaths.Count > 0)
+			{
+				int bestScore = int.MinValue;
+				List<MapPoint> bestPath = null;
+
+				for (int i = 0; i < allPaths.Count; i++)
+				{
+					int score = CalculatePathScore(allPaths[i]);
+					Log.Warn($"RouteSuggest: Path {i + 1} score: {score}");
+
+					if (score > bestScore)
+					{
+						bestScore = score;
+						bestPath = allPaths[i];
+					}
+				}
+
+				if (bestPath != null)
+				{
+					Log.Warn($"RouteSuggest: Best path with score {bestScore}:");
+					foreach (var point in bestPath)
+					{
+						Log.Warn($"RouteSuggest:   coord={point.coord}, type={point.PointType}");
+					}
+				}
+			}
 		}
 	}
 
@@ -96,5 +124,28 @@ public static class RouteSuggest {
 
 		// Backtrack: remove current point from path
 		currentPath.RemoveAt(currentPath.Count - 1);
+	}
+
+	static int CalculatePathScore(List<MapPoint> path)
+	{
+		int score = 0;
+		foreach (var point in path)
+		{
+			switch (point.PointType)
+			{
+				case MapPointType.RestSite:
+				case MapPointType.Treasure:
+				case MapPointType.Shop:
+					score += 1;
+					break;
+				case MapPointType.Monster:
+					score -= 1;
+					break;
+				case MapPointType.Elite:
+					score -= 2;
+					break;
+			}
+		}
+		return score;
 	}
 }
