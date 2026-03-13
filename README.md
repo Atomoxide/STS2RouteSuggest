@@ -2,7 +2,7 @@
 
 ![](screenshot.png)
 
-A mod for Slay the Spire 2 that suggests the optimal path through the map and highlights it in gold on the map screen.
+A mod for Slay the Spire 2 that suggests the optimal path through the map and highlights it in gold/red on the map screen.
 
 **Supported game versions:** v0.98.3 and v0.99 (public beta)
 
