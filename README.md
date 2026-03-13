@@ -98,7 +98,7 @@ You can customize the path types by creating a `RouteSuggestConfig.json` file in
       }
     },
     {
-      "name": "Aggressive", 
+      "name": "Aggressive",
       "color": "#FF0000",
       "priority": 50,
       "scoring_weights": {
