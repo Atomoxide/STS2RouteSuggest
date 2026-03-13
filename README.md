@@ -54,3 +54,10 @@ The mod uses a scoring system to evaluate each possible path from your current p
 | **Monster**   | -1    | Standard combat encounter           |
 | **Elite**     | -2    | Hard combat with better rewards     |
 | **Boss**      | 0     | Final destination (no score impact) |
+
+## Changelog
+
+### v1.0.0
+
+- Initial release
+- Support for game versions v0.98.3 and v0.99
