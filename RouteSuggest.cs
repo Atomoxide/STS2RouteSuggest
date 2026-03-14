@@ -348,10 +348,17 @@ public static class RouteSuggest
                 entries.Add(MakeEntry("", "", GetConfigType("Separator")));
             }
 
+            // convert to entryType[]
+            var entriesArray = Array.CreateInstance(entryType, entries.Count());
+            for (int i = 0; i < entries.Count(); i++)
+            {
+                entriesArray.SetValue(entries[i], i);
+            }
+
             // Register with ModConfig via reflection
             var registerMethod = apiType.GetMethod("Register",
-                new[] { typeof(string), typeof(string), entries.ToArray().GetType() });
-            registerMethod?.Invoke(null, new object[] { "RouteSuggest", "RouteSuggest", entries.ToArray() });
+                new[] { typeof(string), typeof(string), entryType.MakeArrayType() });
+            registerMethod!.Invoke(null, new object[] { "RouteSuggest", "RouteSuggest", entriesArray });
 
             Log.Warn($"RouteSuggest: Registered {entries.Count()} entries with ModConfig (via reflection)");
         }
