@@ -62,6 +62,17 @@ public class PathConfig
 }
 
 /// <summary>
+/// Enum for controlling how many paths to highlight: pick one from optimal paths, or highlight all optimal paths.
+/// </summary>
+public enum HighlightType
+{
+    /// <summary>Highlight one path from among optimal paths.</summary>
+    One,
+    /// <summary>Highlight all paths with the best score.</summary>
+    All
+}
+
+/// <summary>
 /// Main mod class for RouteSuggest. Provides optimal path suggestions on the map with multiple strategies.
 /// </summary>
 [ModInitializer("ModLoaded")]
@@ -74,15 +85,20 @@ public static class RouteSuggest
 
     /// <summary>
     /// Dictionary of calculated paths for each configured path type.
-    /// Key is the path config name, value is the calculated path.
+    /// Key is the path config name, value is a list of calculated paths (one or multiple depending on HighlightType).
     /// </summary>
-    public static Dictionary<string, List<MapPoint>> CalculatedPaths { get; private set; } = new Dictionary<string, List<MapPoint>>();
+    public static Dictionary<string, List<List<MapPoint>>> CalculatedPaths { get; private set; } = new Dictionary<string, List<List<MapPoint>>>();
 
     /// <summary>
     /// List of configured path types. Can be modified at runtime or loaded from config file.
     /// Defaults contain Safe (gold) and Aggressive (red) path types.
     /// </summary>
     public static List<PathConfig> PathConfigs { get; private set; }
+
+    /// <summary>
+    /// Controls whether to highlight one optimal path (One) or all optimal paths (All).
+    /// </summary>
+    public static HighlightType CurrentHighlightType { get; set; } = HighlightType.One;
 
     /// <summary>
     /// Default path configurations used as fallback and for reset functionality.
@@ -161,7 +177,7 @@ public static class RouteSuggest
 
         // Initialize PathConfigs from defaults
         PathConfigs = new List<PathConfig>();
-        ResetToDefaultPathConfigs();
+        ResetToDefault();
 
         // Load configuration from file if available
         LoadConfig();
@@ -253,6 +269,9 @@ public static class RouteSuggest
             // Helper to get ConfigType enum value
             object GetConfigType(string name) => Enum.Parse(configType, name);
 
+            entries.Add(MakeEntry("", "General", GetConfigType("Header"),
+                labels: new() { { "zhs", "通用" } }));
+
             // Reset to defaults logic
             entries.Add(MakeEntry("__reset_default", "Reset to defaults",
                 GetConfigType("Slider"),
@@ -264,13 +283,32 @@ public static class RouteSuggest
                 {
                     if ((int)(float)value == 1)
                     {
-                        ResetToDefaultPathConfigs();
+                        ResetToDefault();
                         SaveAndUpdatePath();
 
                         // Re-register to refresh UI
                         RegisterModConfigViaReflection();
                     }
                 }));
+
+            // Highlight type selector
+            entries.Add(MakeEntry("highlight_type", "Highlight Type",
+                GetConfigType("Dropdown"),
+                defaultValue: CurrentHighlightType.ToString(),
+                options: new[] { "One", "All" },
+                labels: new() { { "zhs", "高亮类型" } },
+                descriptions: new() { { "en", "Pick one path from optimal paths (One) or highlight all optimal paths (All)" }, { "zhs", "从最优路径中选择一条 (One) 或高亮所有最优路径 (All)" } },
+                onChanged: (value) =>
+                {
+                    if (Enum.TryParse<HighlightType>((string)value, out var newType))
+                    {
+                        CurrentHighlightType = newType;
+                        SaveAndUpdatePath();
+                    }
+                }));
+
+
+            entries.Add(MakeEntry("", "", GetConfigType("Separator")));
 
             // Path Management section at the top
             entries.Add(MakeEntry("", "Path Management", GetConfigType("Header"),
@@ -480,7 +518,8 @@ public static class RouteSuggest
 
             var configData = new ConfigFile
             {
-                SchemaVersion = 1,
+                SchemaVersion = 2,
+                HighlightType = CurrentHighlightType.ToString(),
                 PathConfigs = new List<PathConfigEntry>()
             };
 
@@ -520,11 +559,13 @@ public static class RouteSuggest
     }
 
     /// <summary>
-    /// Resets PathConfigs to the default configuration.
+    /// Resets to the default configuration.
     /// Creates deep copies of default configs to avoid modifying the originals.
     /// </summary>
-    public static void ResetToDefaultPathConfigs()
+    public static void ResetToDefault()
     {
+        CurrentHighlightType = HighlightType.One;
+
         PathConfigs.Clear();
         foreach (var defaultConfig in DefaultPathConfigs)
         {
@@ -567,10 +608,20 @@ public static class RouteSuggest
 
             var configData = JsonSerializer.Deserialize<ConfigFile>(json, options);
 
-            if (configData?.SchemaVersion != 1)
+            if (configData?.SchemaVersion != 1 && configData?.SchemaVersion != 2)
             {
                 LogWithTimestamp($"Unsupported schema version {configData?.SchemaVersion}, using defaults");
                 return;
+            }
+
+            // Load highlight type if present
+            if (!string.IsNullOrEmpty(configData.HighlightType))
+            {
+                if (Enum.TryParse<HighlightType>(configData.HighlightType, out var loadedType))
+                {
+                    CurrentHighlightType = loadedType;
+                    LogWithTimestamp($"Loaded highlight type: {loadedType}");
+                }
             }
 
             if (configData.PathConfigs == null)
@@ -696,10 +747,17 @@ public static class RouteSuggest
     private class ConfigFile
     {
         /// <summary>
-        /// Schema version for config file compatibility. Currently must be 1.
+        /// Schema version for config file compatibility. Supported versions: 1 and 2.
+        /// Version 2 adds highlight_type support.
         /// </summary>
         [JsonPropertyName("schema_version")]
         public int SchemaVersion { get; set; }
+
+        /// <summary>
+        /// Controls whether to highlight one optimal path (One) or all optimal paths (All).
+        /// </summary>
+        [JsonPropertyName("highlight_type")]
+        public string HighlightType { get; set; }
 
         /// <summary>
         /// List of path configurations to load.
@@ -898,31 +956,27 @@ public static class RouteSuggest
             CalculatedPaths.Clear();
             foreach (var config in PathConfigs)
             {
-                var path = FindBestPath(startPoint, config);
-                if (path != null)
+                var paths = FindOptimalPaths(startPoint, config);
+                if (paths.Count > 0)
                 {
-                    int score = config.CalculateScore(path);
-                    LogWithTimestamp($"{config.Name} path found with score {score}:");
-                    foreach (var point in path)
-                    {
-                        LogWithTimestamp($"  coord={point.coord}, type={point.PointType}");
-                    }
-                    CalculatedPaths[config.Name] = path;
+                    int score = config.CalculateScore(paths[0]);
+                    LogWithTimestamp($"{config.Name}: {paths.Count} optimal path(s) found with score {score}");
+                    CalculatedPaths[config.Name] = paths;
                 }
             }
         }
     }
 
     /// <summary>
-    /// Finds the best path from startPoint to the Boss using the given configuration's scoring.
-    /// Uses DFS to enumerate all paths, sorts for reproducibility, and returns the highest scoring path.
+    /// Finds optimal paths from startPoint to the Boss using the given configuration's scoring.
+    /// Returns either one path (HighlightType.One) or all paths tied for best score (HighlightType.All).
     /// </summary>
     /// <param name="startPoint">Starting map point.</param>
     /// <param name="config">Path configuration with scoring weights.</param>
-    /// <returns>The best path, or null if no paths found or startPoint is null.</returns>
-    static List<MapPoint> FindBestPath(MapPoint startPoint, PathConfig config)
+    /// <returns>List of optimal paths. Empty list if no paths found.</returns>
+    static List<List<MapPoint>> FindOptimalPaths(MapPoint startPoint, PathConfig config)
     {
-        if (startPoint == null) return null;
+        if (startPoint == null) return new List<List<MapPoint>>();
 
         // DFS to find all paths to Boss
         var currentPath = new List<MapPoint>();
@@ -946,11 +1000,11 @@ public static class RouteSuggest
         // Calculate scores for each path and find the best
         if (allPaths.Count == 0)
         {
-            return null;
+            return new List<List<MapPoint>>();
         }
 
         int bestScore = int.MinValue;
-        List<MapPoint> bestPath = null;
+        var optimalPaths = new List<List<MapPoint>>();
 
         for (int i = 0; i < allPaths.Count; i++)
         {
@@ -960,11 +1014,24 @@ public static class RouteSuggest
             if (score > bestScore)
             {
                 bestScore = score;
-                bestPath = allPaths[i];
+                optimalPaths.Clear();
+                optimalPaths.Add(allPaths[i]);
+            }
+            else if (score == bestScore)
+            {
+                optimalPaths.Add(allPaths[i]);
             }
         }
 
-        return bestPath;
+        LogWithTimestamp($"Found {optimalPaths.Count} optimal path(s) with score {bestScore}");
+
+        // If HighlightType.One, return only one path (first for consistency)
+        if (CurrentHighlightType == HighlightType.One && optimalPaths.Count > 1)
+        {
+            return new List<List<MapPoint>> { optimalPaths[0] };
+        }
+
+        return optimalPaths;
     }
 
     /// <summary>
@@ -1046,15 +1113,24 @@ public static class RouteSuggest
             var pathSegments = new Dictionary<string, HashSet<(MapCoord, MapCoord)>>();
             foreach (var kvp in CalculatedPaths)
             {
-                var path = kvp.Value;
-                if (path != null && path.Count >= 2)
+                var pathList = kvp.Value;
+                if (pathList != null && pathList.Count > 0)
                 {
                     var segments = new HashSet<(MapCoord, MapCoord)>();
-                    for (int i = 0; i < path.Count - 1; i++)
+                    foreach (var path in pathList)
                     {
-                        segments.Add((path[i].coord, path[i + 1].coord));
+                        if (path != null && path.Count >= 2)
+                        {
+                            for (int i = 0; i < path.Count - 1; i++)
+                            {
+                                segments.Add((path[i].coord, path[i + 1].coord));
+                            }
+                        }
                     }
-                    pathSegments[kvp.Key] = segments;
+                    if (segments.Count > 0)
+                    {
+                        pathSegments[kvp.Key] = segments;
+                    }
                 }
             }
 

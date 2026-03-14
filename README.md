@@ -9,10 +9,12 @@ A mod for Slay the Spire 2 that suggests the optimal path through the map and hi
 ## Features
 
 - **Dual path suggestions**: Shows two optimal routes - a safe path and an aggressive path
-- **Visual highlighting**: 
+- **Visual highlighting**:
   - **Gold**: Safe path (minimizes risk)
   - **Red**: Aggressive path (prioritizes combat for rewards)
 - **Smart scoring**: Different weights for safe vs aggressive playstyles
+- **GUI Configuration**: Full in-game configuration via ModConfig (optional)
+- **Manual Configuration**: Direct JSON configuration for advanced users
 
 ## Installation
 
@@ -85,6 +87,10 @@ RouteSuggest optionally integrates with [**ModConfig**](https://github.com/xhyrz
 
 With ModConfig GUI, you can:
 
+- **General Settings**:
+  - **Highlight Type**: Choose to highlight one optimal path or all paths with optimal score
+    - **One**: Pick one path from among optimal paths
+    - **All**: Highlight all paths tied for the best score
 - **Configure each path**:
   - **Name**: Identifier for the path
   - **Color**: Enter hex color code (e.g., `#FFD700` for gold, `#FF0000` for red)
@@ -95,6 +101,7 @@ With ModConfig GUI, you can:
     - Zero = neutral
 - **Add New Path**: Slider to add a new path (slide to 1)
 - **Remove Path**: Each path has a slider to remove it (0=keep, 1=remove)
+- **Reset to Defaults**: Slider to reset all paths to default configuration
 - **Changes are saved automatically** to `mods/RouteSuggestConfig.json`
 
 ### Manual JSON Configuration
@@ -103,7 +110,8 @@ Alternatively, you can customize the path types by manually editing `RouteSugges
 
 ```json
 {
-  "schema_version": 1,
+  "schema_version": 2,
+  "highlight_type": "One",
   "path_configs": [
     {
       "name": "Safe",
@@ -134,6 +142,7 @@ Alternatively, you can customize the path types by manually editing `RouteSugges
 }
 ```
 
+- **highlight_type**: "One" (pick one optimal path) or "All" (highlight all paths with optimal score)
 - **color**: Hex color code (e.g., `#FFD700` for gold, `#FF0000` for red)
 - **priority**: Higher values render on top when paths overlap
 - **scoring_weights**: Integer values for each room type (positive = preferred, negative = avoid)
@@ -143,6 +152,13 @@ Available room types: `RestSite`, `Treasure`, `Shop`, `Monster`, `Elite`, `Unkno
 If the config file is missing or invalid, default path configs are used.
 
 ## Changelog
+
+### v1.5.0
+
+- Add HighlightType option to control how many paths to highlight
+  - **One**: Pick one path from among optimal paths
+  - **All**: Highlight all paths with the optimal best score
+  - Available in both ModConfig GUI and JSON config
 
 ### v1.4.0
 
