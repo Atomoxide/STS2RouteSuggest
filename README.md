@@ -157,6 +157,10 @@ If the config file is missing or invalid, default path configs are used.
 
 ## Changelog
 
+### v1.7.0
+
+- Set `affects_gameplay` to false since this mod is visual-only and does not impact gameplay
+
 ### v1.6.0
 
 - Improved config file path resolution
