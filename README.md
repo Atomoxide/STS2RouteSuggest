@@ -92,6 +92,7 @@ With ModConfig GUI, you can:
     - **One**: Pick one path from among optimal paths
     - **All**: Highlight all paths tied for the best score
 - **Configure each path**:
+  - **Enabled**: Toggle to enable/disable this path (disabled paths are not calculated or shown)
   - **Name**: Identifier for the path
   - **Color**: Enter hex color code (e.g., `#FFD700` for gold, `#FF0000` for red)
   - **Priority**: Slider to set rendering priority (higher = renders on top when paths overlap)
@@ -114,13 +115,14 @@ Alternatively, you can customize the path types by manually editing `RouteSugges
 
 ```json
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "highlight_type": "One",
   "path_configs": [
     {
       "name": "Safe",
       "color": "#FFD700",
       "priority": 100,
+      "enabled": true,
       "scoring_weights": {
         "RestSite": 1,
         "Treasure": 1,
@@ -133,6 +135,7 @@ Alternatively, you can customize the path types by manually editing `RouteSugges
       "name": "Aggressive",
       "color": "#FF0000",
       "priority": 50,
+      "enabled": true,
       "scoring_weights": {
         "RestSite": 1,
         "Treasure": 1,
@@ -146,7 +149,10 @@ Alternatively, you can customize the path types by manually editing `RouteSugges
 }
 ```
 
+- **schema_version**: Config file format version (3 is the current version)
 - **highlight_type**: "One" (pick one optimal path) or "All" (highlight all paths with optimal score)
+- **name**: Identifier for the path (e.g., "Safe", "Aggressive")
+- **enabled**: Set to `false` to disable a path (disabled paths are not calculated or shown)
 - **color**: Hex color code (e.g., `#FFD700` for gold, `#FF0000` for red)
 - **priority**: Higher values render on top when paths overlap
 - **scoring_weights**: Integer values for each room type (positive = preferred, negative = avoid)
@@ -156,6 +162,12 @@ Available room types: `RestSite`, `Treasure`, `Shop`, `Monster`, `Elite`, `Unkno
 If the config file is missing or invalid, default path configs are used.
 
 ## Changelog
+
+### Unreleased
+
+- Added enable/disable option for each path configuration
+  - Disabled paths are not calculated or shown on the map
+  - Available in both ModConfig GUI and JSON config
 
 ### v1.7.0
 

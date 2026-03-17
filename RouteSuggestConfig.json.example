@@ -1,11 +1,12 @@
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "highlight_type": "One",
   "path_configs": [
     {
       "name": "Safe",
       "color": "#FFD700",
       "priority": 100,
+      "enabled": true,
       "scoring_weights": {
         "RestSite": 1,
         "Treasure": 1,
@@ -18,6 +19,7 @@
       "name": "Aggressive",
       "color": "#FF0000",
       "priority": 50,
+      "enabled": true,
       "scoring_weights": {
         "RestSite": 1,
         "Treasure": 1,

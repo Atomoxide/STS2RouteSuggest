@@ -35,6 +35,11 @@ public class PathConfig
     public int Priority { get; set; }
 
     /// <summary>
+    /// Whether this path is enabled. Disabled paths are not calculated or shown.
+    /// </summary>
+    public bool Enabled { get; set; } = true;
+
+    /// <summary>
     /// Scoring weights for each room type. Positive values make the room more desirable,
     /// negative values make it less desirable. Only rooms with defined weights contribute to the score.
     /// </summary>
@@ -379,6 +384,20 @@ public static class RouteSuggest
                         }
                     }));
 
+                // Enable/disable this path (0 = disabled, 1 = enabled)
+                entries.Add(MakeEntry($"path_{i}_enabled", "Enabled (0=disabled, 1=enabled)",
+                    GetConfigType("Slider"),
+                    defaultValue: config.Enabled ? 1f : 0f,
+                    min: 0, max: 1, step: 1, format: "F0",
+                    labels: new() { { "zhs", "是否启用 (0=禁用, 1=启用)" } },
+                    descriptions: new() { { "en", "Enable or disable this path" }, { "zhs", "启用或禁用此路径" } },
+                    onChanged: (value) =>
+                    {
+                        config.Enabled = (int)(float)value == 1;
+                        SaveAndUpdatePath();
+                    }));
+
+
                 // Name
                 entries.Add(MakeEntry($"path_{i}_name", "Name", GetConfigType("TextInput"),
                     defaultValue: config.Name,
@@ -586,7 +605,7 @@ public static class RouteSuggest
 
             var configData = new ConfigFile
             {
-                SchemaVersion = 2,
+                SchemaVersion = 3,
                 HighlightType = CurrentHighlightType.ToString(),
                 PathConfigs = new List<PathConfigEntry>()
             };
@@ -598,6 +617,7 @@ public static class RouteSuggest
                     Name = config.Name,
                     Color = $"#{config.Color.ToHtml(false)}",
                     Priority = config.Priority,
+                    Enabled = config.Enabled,
                     ScoringWeights = new Dictionary<string, int>()
                 };
 
@@ -642,6 +662,7 @@ public static class RouteSuggest
                 Name = defaultConfig.Name,
                 Color = defaultConfig.Color,
                 Priority = defaultConfig.Priority,
+                Enabled = defaultConfig.Enabled,
                 ScoringWeights = new Dictionary<MapPointType, int>(defaultConfig.ScoringWeights)
             };
             PathConfigs.Add(config);
@@ -677,7 +698,7 @@ public static class RouteSuggest
 
             var configData = JsonSerializer.Deserialize<ConfigFile>(json, options);
 
-            if (configData?.SchemaVersion != 1 && configData?.SchemaVersion != 2)
+            if (configData?.SchemaVersion != 1 && configData?.SchemaVersion != 2 && configData?.SchemaVersion != 3)
             {
                 LogWithTimestamp($"Unsupported schema version {configData?.SchemaVersion}, using defaults");
                 return;
@@ -708,10 +729,11 @@ public static class RouteSuggest
                     Name = configEntry.Name,
                     Priority = configEntry.Priority,
                     Color = ParseColor(configEntry.Color),
+                    Enabled = configEntry.Enabled,
                     ScoringWeights = ParseScoringWeights(configEntry.ScoringWeights)
                 };
                 PathConfigs.Add(config);
-                LogWithTimestamp($"Loaded path config '{config.Name}' from file");
+                LogWithTimestamp($"Loaded path config '{config.Name}' (enabled: {config.Enabled}) from file");
             }
 
             LogWithTimestamp($"Successfully loaded {PathConfigs.Count} path configs from {configPath}");
@@ -732,7 +754,7 @@ public static class RouteSuggest
 
         foreach (var config in PathConfigs)
         {
-            LogWithTimestamp($"  Path: {config.Name}");
+            LogWithTimestamp($"  Path: {config.Name} (Enabled: {config.Enabled})");
             LogWithTimestamp($"    Priority: {config.Priority}");
             LogWithTimestamp($"    Color: R={config.Color.R:F2}, G={config.Color.G:F2}, B={config.Color.B:F2}, A={config.Color.A:F2}");
             LogWithTimestamp($"    Scoring Weights:");
@@ -816,8 +838,9 @@ public static class RouteSuggest
     private class ConfigFile
     {
         /// <summary>
-        /// Schema version for config file compatibility. Supported versions: 1 and 2.
+        /// Schema version for config file compatibility. Supported versions: 1, 2, and 3.
         /// Version 2 adds highlight_type support.
+        /// Version 3 adds enabled field to path configs.
         /// </summary>
         [JsonPropertyName("schema_version")]
         public int SchemaVersion { get; set; }
@@ -857,6 +880,12 @@ public static class RouteSuggest
         /// </summary>
         [JsonPropertyName("priority")]
         public int Priority { get; set; }
+
+        /// <summary>
+        /// Whether this path is enabled. Disabled paths are not calculated or shown.
+        /// </summary>
+        [JsonPropertyName("enabled")]
+        public bool Enabled { get; set; } = true;
 
         /// <summary>
         /// Scoring weights as string-keyed dictionary (keys are MapPointType names).
@@ -1022,10 +1051,15 @@ public static class RouteSuggest
         {
             LogWithTimestamp($"At map point {startPoint.coord}");
 
-            // Calculate paths for all configured path types
+            // Calculate paths for all enabled path types
             CalculatedPaths.Clear();
             foreach (var config in PathConfigs)
             {
+                if (!config.Enabled)
+                {
+                    LogWithTimestamp($"{config.Name}: skipped (disabled)");
+                    continue;
+                }
                 var paths = FindOptimalPaths(startPoint, config);
                 if (paths.Count > 0)
                 {
@@ -1206,7 +1240,7 @@ public static class RouteSuggest
 
             // Assign color to each segment based on priority (highest priority wins)
             var segmentColors = new Dictionary<(MapCoord, MapCoord), Color>();
-            var sortedConfigs = PathConfigs.OrderByDescending(c => c.Priority).ToList();
+            var sortedConfigs = PathConfigs.Where(c => c.Enabled).OrderByDescending(c => c.Priority).ToList();
 
             foreach (var config in sortedConfigs)
             {
