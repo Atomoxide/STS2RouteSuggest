@@ -1152,7 +1152,7 @@ public static class RouteSuggest
             return memo[target.ToString()];
         }
 
-        int bestParentScore = int.MinValue;
+        int bestParentScore = -100000;
         List<MapPoint> bestParentPath = null;
 
         foreach(var parent in target.parents)
