@@ -164,7 +164,7 @@ If the config file is missing or invalid, default path configs are used.
 
 ## Changelog
 
-### Unreleased
+### v1.8.0
 
 - Improved ModConfig UI: changed sliders to toggles for easier configuration
 - Added enable/disable option for each path configuration
