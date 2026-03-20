@@ -123,7 +123,9 @@ public static class RouteSuggest
                 { MapPointType.Monster, -1 },
                 { MapPointType.Elite, -99 },
                 { MapPointType.Unknown, 0 },
-                { MapPointType.Boss, 0 }
+                { MapPointType.Boss, 0 },
+                { MapPointType.Ancient, 0 },
+                { MapPointType.Unassigned, 0 }
             }
         },
         new PathConfig
@@ -139,7 +141,9 @@ public static class RouteSuggest
                 { MapPointType.Monster, 2 },
                 { MapPointType.Elite, 3 },
                 { MapPointType.Unknown, 2 },
-                { MapPointType.Boss, 0 }
+                { MapPointType.Boss, 0 },
+                { MapPointType.Ancient, 0 },
+                { MapPointType.Unassigned, 0 }
             }
         }
     };
@@ -1163,7 +1167,7 @@ public static class RouteSuggest
         try
         {
             LogWithTimestamp($"Writing DP score for {target.ToString()}");
-            memo[target.ToString()] = (bestParentScore + config.ScoringWeights[target.PointType], bestParentPath != null ? new List<MapPoint>(bestParentPath) { target } : null);
+            memo[target.ToString()] = (config.ScoringWeights.TryGetValue(target.PointType, out int weight) ? bestParentScore + weight : bestParentScore + 0, bestParentPath != null ? new List<MapPoint>(bestParentPath) { target } : null);
             return memo[target.ToString()];
         }
         catch (Exception ex)
