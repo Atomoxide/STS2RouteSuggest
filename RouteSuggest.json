@@ -1,9 +1,9 @@
 {
     "id": "RouteSuggest",
     "name": "RouteSuggest",
-    "author": "Jiajie Chen @jiegec <c@jia.je>",
-    "description": "Suggest best routes in game (gold for safe, red for aggressive by default, configurable)",
-    "version": "1.8.0",
+    "author": "Jiajie Chen @jiegec <c@jia.je> / Atomoxide @atomoxide",
+    "description": "Suggest best routes in game (gold for safe, red for aggressive by default, configurable), update with using dynamic programming to achieve better performance",
+    "version": "1.8.0 - DP optimization",
     "has_pck": true,
     "has_dll": true,
     "dependencies": [],
