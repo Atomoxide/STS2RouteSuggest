@@ -122,7 +122,8 @@ public static class RouteSuggest
                 { MapPointType.Shop, 1 },
                 { MapPointType.Monster, -1 },
                 { MapPointType.Elite, -99 },
-                { MapPointType.Unknown, 0 }
+                { MapPointType.Unknown, 0 },
+                { MapPointType.Boss, 0 }
             }
         },
         new PathConfig
@@ -137,7 +138,8 @@ public static class RouteSuggest
                 { MapPointType.Shop, 1 },
                 { MapPointType.Monster, 2 },
                 { MapPointType.Elite, 3 },
-                { MapPointType.Unknown, 2 }
+                { MapPointType.Unknown, 2 },
+                { MapPointType.Boss, 0 }
             }
         }
     };
@@ -1086,6 +1088,7 @@ public static class RouteSuggest
 
         // Get current position, fallback to starting point if not set
         var startPoint = runState.CurrentMapPoint ?? runState.Map?.StartingMapPoint;
+        var bossPoint = runState.Map?.BossMapPoint;
 
         if (startPoint != null)
         {
@@ -1100,7 +1103,8 @@ public static class RouteSuggest
                     LogWithTimestamp($"{config.Name}: skipped (disabled)");
                     continue;
                 }
-                var paths = FindOptimalPaths(startPoint, config);
+                // var paths = FindOptimalPaths(startPoint, config);
+                var paths = FindOptimalPathsDp(startPoint, bossPoint, config);
                 if (paths.Count > 0)
                 {
                     int score = config.CalculateScore(paths[0]);
@@ -1112,102 +1116,61 @@ public static class RouteSuggest
     }
 
     /// <summary>
-    /// Finds optimal paths from startPoint to the Boss using the given configuration's scoring.
-    /// Returns either one path (HighlightType.One) or all paths tied for best score (HighlightType.All).
+    /// Using dynamic programming to find the best path from start to boss, based on the scoring weights in the config.
+    /// Map is a DAG, so we can calculate the best score for each node starting from the boss and working backwards.
     /// </summary>
-    /// <param name="startPoint">Starting map point.</param>
-    /// <param name="config">Path configuration with scoring weights.</param>
-    /// <returns>List of optimal paths. Empty list if no paths found.</returns>
-    static List<List<MapPoint>> FindOptimalPaths(MapPoint startPoint, PathConfig config)
+    static List<List<MapPoint>> FindOptimalPathsDp(MapPoint startPoint, MapPoint bossPoint, PathConfig config)
     {
-        if (startPoint == null) return new List<List<MapPoint>>();
 
-        // DFS to find all paths to Boss
-        var currentPath = new List<MapPoint>();
-        var allPaths = new List<List<MapPoint>>();
-        FindAllPathsToBoss(startPoint, currentPath, allPaths);
+        Dictionary<string, (int bestScore, List<MapPoint> bestPath)> memo = new Dictionary<string, (int, List<MapPoint>)>();
+        memo[startPoint.ToString()] = (0, new List<MapPoint> { startPoint });
+        LogWithTimestamp($"Calculating best path fron current position {startPoint.ToString()} to boss {bossPoint.ToString()} using dynamic programming");
+        var (bestScore, bestPath) = CaluculateDpScores(startPoint, bossPoint, memo, config);
 
-        // Sort paths by their coordinate sequence for reproducibility
-        allPaths.Sort((a, b) =>
-        {
-            int minLen = Math.Min(a.Count, b.Count);
-            for (int i = 0; i < minLen; i++)
-            {
-                int cmp = a[i].coord.CompareTo(b[i].coord);
-                if (cmp != 0) return cmp;
-            }
-            return a.Count.CompareTo(b.Count);
-        });
-
-        LogWithTimestamp($"Found {allPaths.Count} path(s) to Boss");
-
-        // Calculate scores for each path and find the best
-        if (allPaths.Count == 0)
-        {
-            return new List<List<MapPoint>>();
-        }
-
-        int bestScore = int.MinValue;
-        var optimalPaths = new List<List<MapPoint>>();
-
-        for (int i = 0; i < allPaths.Count; i++)
-        {
-            int score = config.CalculateScore(allPaths[i]);
-            LogWithTimestamp($"Path {i + 1} score: {score}");
-
-            if (score > bestScore)
-            {
-                bestScore = score;
-                optimalPaths.Clear();
-                optimalPaths.Add(allPaths[i]);
-            }
-            else if (score == bestScore)
-            {
-                optimalPaths.Add(allPaths[i]);
-            }
-        }
-
-        LogWithTimestamp($"Found {optimalPaths.Count} optimal path(s) with score {bestScore}");
-
-        // If HighlightType.One, return only one path (first for consistency)
-        if (CurrentHighlightType == HighlightType.One && optimalPaths.Count > 1)
-        {
-            return new List<List<MapPoint>> { optimalPaths[0] };
-        }
-
-        return optimalPaths;
+        LogWithTimestamp($"DP calculated best path with score {bestScore}");
+        return bestPath != null ? new List<List<MapPoint>> { bestPath } : new List<List<MapPoint>>();
+        
     }
 
     /// <summary>
-    /// Recursive DFS helper to find all paths from current point to the Boss.
+    /// Calculates the score of a path based on the config's scoring weights.
     /// </summary>
-    /// <param name="current">Current map point.</param>
-    /// <param name="currentPath">Accumulated path so far.</param>
-    /// <param name="allPaths">Output list to collect all complete paths.</param>
-    static void FindAllPathsToBoss(MapPoint current, List<MapPoint> currentPath, List<List<MapPoint>> allPaths)
+    static (int bestScore, List<MapPoint> bestPath) CaluculateDpScores(MapPoint start, MapPoint target, Dictionary<string, (int bestScore, List<MapPoint> bestPath)> memo, PathConfig config)
     {
-        if (current == null) return;
-
-        // Add current point to path
-        currentPath.Add(current);
-
-        // Check if we reached the Boss
-        if (current.PointType == MapPointType.Boss)
+        
+        if (target.Equals(start))
         {
-            // Found a path to Boss, save a copy
-            allPaths.Add(new List<MapPoint>(currentPath));
+            return (0, new List<MapPoint> { start });
         }
-        else if (current.Children != null && current.Children.Count > 0)
+
+        if (memo.ContainsKey(target.ToString()))
         {
-            // Continue DFS on children
-            foreach (var child in current.Children)
+            return memo[target.ToString()];
+        }
+
+        int bestParentScore = int.MinValue;
+        List<MapPoint> bestParentPath = null;
+
+        foreach(var parent in target.parents)
+        {
+            var (parentScore, parentPath) = CaluculateDpScores(start, parent, memo, config);
+            if (parentScore > bestParentScore)
             {
-                FindAllPathsToBoss(child, currentPath, allPaths);
+                bestParentScore = parentScore;
+                bestParentPath = parentPath;
             }
         }
-
-        // Backtrack: remove current point from path
-        currentPath.RemoveAt(currentPath.Count - 1);
+        try
+        {
+            LogWithTimestamp($"Writing DP score for {target.ToString()}");
+            memo[target.ToString()] = (bestParentScore + config.ScoringWeights[target.PointType], bestParentPath != null ? new List<MapPoint>(bestParentPath) { target } : null);
+            return memo[target.ToString()];
+        }
+        catch (Exception ex)
+        {
+            LogWithTimestamp($"Error calculating DP score for {target.ToString()}: {ex.Message}");
+            return (int.MinValue, null);
+        }
     }
 
     /// <summary>
